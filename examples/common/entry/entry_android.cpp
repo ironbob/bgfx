@@ -4,6 +4,7 @@
  */
 
 #include "entry_p.h"
+#include <string>
 
 #if ENTRY_CONFIG_USE_NATIVE && BX_PLATFORM_ANDROID
 
@@ -555,11 +556,36 @@ namespace entry
 		return bgfx::NativeWindowHandleType::Default;
 	}
 
+   static const std::string GetExtStoragePath()//返回/sdcard/Android/data/<package name>/files
+    {
+        android_app* app = s_ctx.m_app;
+        ANativeActivity* activity = app->activity;
+        JNIEnv* env = nullptr;
+
+        (*activity->vm).AttachCurrentThread(&env, 0);
+
+        jclass clazz = env->GetObjectClass(activity->clazz);
+        jmethodID methodID = env->GetMethodID(clazz, "getExternalFilesDir", "(Ljava/lang/String;)Ljava/io/File;");
+        jobject file = env->CallObjectMethod(activity->clazz, methodID, NULL);
+
+        jclass fileClass = env->FindClass("java/io/File");
+        jmethodID getAbsolutePath = env->GetMethodID(fileClass, "getAbsolutePath", "()Ljava/lang/String;");
+        jobject result = env->CallObjectMethod(file, getAbsolutePath);
+
+        jboolean isCopy;
+        std::string res = env->GetStringUTFChars((jstring)result, &isCopy);
+
+        env->DeleteLocalRef(file);
+        env->DeleteLocalRef(result);
+
+        return res;
+    }
+
 	int32_t MainThreadEntry::threadFunc(bx::Thread* _thread, void* _userData)
 	{
 		BX_UNUSED(_thread);
-
-		int32_t result = chdir("/sdcard/bgfx/examples/runtime");
+        const std::string resPath = GetExtStoragePath() + "/runtime";
+		int32_t result = chdir(resPath.c_str());
 		BX_ASSERT(0 == result
 			, "Failed to chdir to directory (errno: %d, android.permission.WRITE_EXTERNAL_STORAGE?)."
 			, errno
